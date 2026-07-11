@@ -1273,8 +1273,6 @@ function exportExcel() {
   ws4.getColumn(3).width = 42;
   ws4.getColumn(4).width = 3;
 
-  var IMG_H_PX = 160, IMG_W_PX = 280;
-  var LABEL_ROW_H = 20, IMG_ROW_H = 130;
 
   var pendingImages = photos.map(function(p, idx) {
     return { idx:idx, label:p.label, src:p.src };
@@ -1288,6 +1286,9 @@ function exportExcel() {
   }
 
   var startRow = 4;
+  var LABEL_PT = 30;
+  var IMG_PT   = 110;
+
   var imagePromises = pendingImages.map(function(item) {
     return new Promise(function(resolve) {
       var isRight = item.idx % 2 === 1;
@@ -1296,38 +1297,48 @@ function exportExcel() {
       var irow    = lrow + 1;
       var col     = isRight ? 3 : 1;
 
-      ws4.getRow(lrow).height = LABEL_ROW_H;
-      ws4.getRow(irow).height = IMG_ROW_H;
+      ws4.getRow(lrow).height = LABEL_PT;
+      ws4.getRow(irow).height = IMG_PT;
 
-      // Label cell
+      // Label — wrap text so long labels stay inside the box
       var lc = ws4.getCell(lrow, col);
-      lc.value = 'Photo ' + (item.idx+1) + '  \u2014  ' + item.label;
+      lc.value = 'Photo ' + (item.idx+1) + '  —  ' + item.label;
       lc.font  = { name:'Arial', size:9, bold:true, color:{argb:NAVY} };
       lc.fill  = { type:'pattern', pattern:'solid', fgColor:{argb:LBLUE} };
-      lc.alignment = { horizontal:'left', vertical:'middle' };
-      lc.border = { top:{style:'medium',color:{argb:NAVY}}, left:{style:'thin',color:{argb:NAVY}}, bottom:thin, right:thin };
-      // no merge needed for label in ExcelJS (single cell)
+      lc.alignment = { horizontal:'left', vertical:'middle', wrapText:true };
+      lc.border = {
+        top:    { style:'medium', color:{argb:NAVY} },
+        left:   { style:'thin',   color:{argb:NAVY} },
+        bottom: thin, right: thin
+      };
 
-      // Image cell bg
+      // Image cell
       var ic = ws4.getCell(irow, col);
       ic.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF8FAFC'} };
-      ic.border = { top:thin, left:{style:'thin',color:{argb:NAVY}}, bottom:{style:'medium',color:{argb:NAVY}}, right:thin };
+      ic.border = {
+        top: thin,
+        left:   { style:'thin',   color:{argb:NAVY} },
+        bottom: { style:'medium', color:{argb:NAVY} },
+        right: thin
+      };
 
-      // Embed image from base64
-      var src = item.src;
-      // src is data:image/jpeg;base64,.... or data:image/png;base64,...
+      // Embed image using tl+br cell anchors for proper in-cell positioning
+      var src   = item.src;
       var parts = src.split(',');
       var b64   = parts[1] || '';
       var mime  = (src.match(/data:image\/(\w+);/) || ['','jpeg'])[1];
       var ext   = (mime === 'png') ? 'png' : 'jpeg';
 
-      var imgId = wb.addImage({ base64: b64, extension: ext });
-      // Position: col-1 index (0-based), row-1 index (0-based)
-      ws4.addImage(imgId, {
-        tl: { col: col-1, row: irow-1 },
-        ext: { width: IMG_W_PX, height: IMG_H_PX }
-      });
-
+      try {
+        var imgId = wb.addImage({ base64: b64, extension: ext });
+        ws4.addImage(imgId, {
+          tl: { col: col - 1, row: irow - 1 },
+          br: { col: col,     row: irow },
+          editAs: 'oneCell'
+        });
+      } catch(e) {
+        console.warn('Photo embed error:', item.idx+1, e.message);
+      }
       resolve();
     });
   });
