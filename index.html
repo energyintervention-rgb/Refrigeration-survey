@@ -12,9 +12,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Refrig Survey">
 <style>*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#f5f6f8;color:#1a1a1a;font-size:15px}
-@media(prefers-color-scheme:dark){body{background:#181818;color:#e8e8e8}}
-body.light-mode{background:#f5f6f8!important;color:#1a1a1a!important}
+body{font-family:Arial,sans-serif;background:#f5f6f8;color:#1a1a1a;font-size:15px;color-scheme:light}
+@media(prefers-color-scheme:dark){body{background:#181818;color:#e8e8e8;color-scheme:dark}}
+body.light-mode{background:#f5f6f8!important;color:#1a1a1a!important;color-scheme:light!important}
 body.light-mode .logo-bar{border-color:#dce3ee!important}
 body.light-mode .logo-txt{color:#6b7a99!important}
 body.light-mode .top-title p{color:#6b7a99!important}
@@ -210,9 +210,12 @@ input[type=file]{display:none}
 .si-field{display:flex;flex-direction:column;gap:4px}
 .si-field.full{grid-column:1/-1}
 .si-field label{font-size:11px;font-weight:700;color:#6b7a99;text-transform:uppercase;letter-spacing:.05em}
-.si-field input,.si-field select,.si-field textarea{border:1px solid #c8d4e8;border-radius:7px;background:#f8fafc;color:#1a1a1a;font-size:13px;padding:7px 10px;font-family:Arial,sans-serif;width:100%;min-width:0}
+.si-field input,.si-field select,.si-field textarea{border:1px solid #c8d4e8;border-radius:7px;background:#f8fafc;color:#1a1a1a;font-size:13px;padding:7px 10px;font-family:Arial,sans-serif;width:100%;min-width:0;box-sizing:border-box}
 .si-field input:focus,.si-field select:focus,.si-field textarea:focus{outline:none;border-color:#2E75B6;background:#fff}
-@media(prefers-color-scheme:dark){.si-field input,.si-field select,.si-field textarea{background:#2a2a2a;border-color:#444;color:#e8e8e8}}
+@media(prefers-color-scheme:dark){.si-field input,.si-field select,.si-field textarea{background:#2a2a2a;border-color:#444;color:#e8e8e8;color-scheme:dark}}
+input[type="date"]{width:100%;min-width:0;box-sizing:border-box;-webkit-appearance:none;appearance:none}
+@media(prefers-color-scheme:dark){input[type="date"]{color-scheme:dark;color:#e8e8e8;background:#2a2a2a}}
+body.light-mode input[type="date"]{color-scheme:light;color:#1a1a1a;background:#f8fafc}
 .si-field textarea{resize:none;height:56px;line-height:1.5}
 .si-hint{font-size:11px;color:#6b7a99;margin-top:2px}
 .si-divider{grid-column:1/-1;height:1px;background:#eef1f7}
