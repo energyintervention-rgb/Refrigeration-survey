@@ -326,7 +326,7 @@ input[type="date"]{width:100%;min-width:0}
   .photo-appendix-page{break-before:page;break-inside:avoid}
   .photo-appendix-page:first-child{break-before:auto}
 }</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -1127,69 +1127,231 @@ function exportCSV() {
 
 function exportExcel() {
   document.getElementById('export-menu').classList.remove('show');
-  if (typeof XLSX === 'undefined') { showToast('Excel library not loaded — check internet connection.'); return; }
   var rows = collectRows();
-  if (!rows.length) { showToast('No data to export — add some units first.'); return; }
+  if (!rows.length) { showToast('No data to export \u2014 add some units first.'); return; }
 
-  var wb = XLSX.utils.book_new();
+  // ExcelJS must be loaded
+  if (typeof ExcelJS === 'undefined') {
+    showToast('Excel library loading\u2026 please try again in a moment.');
+    return;
+  }
 
-  // Sheet 1: Site Info
-  var ref = document.getElementById('audit-ref') ? document.getElementById('audit-ref').value : '';
-  var siteRows = [['Refrigeration Survey — Site Information'],[]];
-  var siteFields = [
-    ['Survey reference', ref],
-    ['Store code', document.getElementById('si-store-code') ? document.getElementById('si-store-code').value : ''],
-    ['Store name', document.getElementById('si-store-name') ? document.getElementById('si-store-name').value : ''],
-    ['Store type', document.getElementById('si-store-type') ? document.getElementById('si-store-type').options[document.getElementById('si-store-type').selectedIndex].text : ''],
-    ['Address', document.getElementById('si-address') ? document.getElementById('si-address').value : ''],
-    ['Country', document.getElementById('si-country') ? document.getElementById('si-country').options[document.getElementById('si-country').selectedIndex].text : ''],
-    ['State / Region', document.getElementById('si-state') ? document.getElementById('si-state').options[document.getElementById('si-state').selectedIndex].text : ''],
-    ['GPS', document.getElementById('gps-val') ? document.getElementById('gps-val').value : ''],
-    ['Auditor name', document.getElementById('si-auditor-name') ? document.getElementById('si-auditor-name').value : ''],
-    ['Auditor company', document.getElementById('si-auditor-company') ? document.getElementById('si-auditor-company').value : ''],
-    ['Audit date', document.getElementById('audit-date-field') ? document.getElementById('audit-date-field').value : ''],
-    ['Site contact', document.getElementById('si-contact-person') ? document.getElementById('si-contact-person').value : ''],
-    ['Contact number', document.getElementById('si-contact-number') ? document.getElementById('si-contact-number').value : ''],
-    ['Avg monthly bill', document.getElementById('si-monthly-bill') ? document.getElementById('si-monthly-bill').value : ''],
-    ['Site notes', document.getElementById('si-notes') ? document.getElementById('si-notes').value : '']
+  showToast('Building Excel report\u2026');
+
+  // Collect photos
+  var photos = [];
+  document.querySelectorAll('.thumb').forEach(function(th) {
+    if (th.dataset.src) photos.push({ src: th.dataset.src, label: th.dataset.label || '' });
+  });
+
+  var wb = new ExcelJS.Workbook();
+  wb.creator = 'City Technical Solutions';
+  wb.created = new Date();
+
+  var NAVY = 'FF1F4E79', BLUE = 'FF2E75B6', LBLUE = 'FFE8F1FB', WHITE = 'FFFFFFFF', GREY = 'FFF5F6F8';
+  var thin = { style: 'thin', color: { argb: 'FFDCE3EE' } };
+  var bdr  = { top: thin, left: thin, bottom: thin, right: thin };
+
+  function hStyle(ws, row, col, val, opts) {
+    opts = opts || {};
+    var cell = ws.getCell(row, col);
+    cell.value = val;
+    cell.font = { name: 'Arial', size: opts.sz||11, bold: opts.bold!==false, color: { argb: opts.fg||WHITE } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg||NAVY } };
+    cell.alignment = { horizontal: opts.align||'left', vertical: 'middle', wrapText: true };
+    cell.border = bdr;
+    return cell;
+  }
+  function bStyle(ws, row, col, val, opts) {
+    opts = opts || {};
+    var cell = ws.getCell(row, col);
+    cell.value = val;
+    cell.font = { name: 'Arial', size: opts.sz||10, bold: !!opts.bold, color: { argb: opts.fg||'FF1A1A1A' } };
+    if (opts.bg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.bg } };
+    cell.alignment = { horizontal: opts.align||'left', vertical: 'middle', wrapText: true };
+    cell.border = bdr;
+    return cell;
+  }
+
+  // ── Sheet 1: Site Info ─────────────────────────────────────────────────────
+  var ws1 = wb.addWorksheet('Site Info');
+  ws1.views = [{ showGridLines: false }];
+  var s1h = ws1.getCell(1,1); s1h.value = 'Refrigeration Survey \u2014 Site Information';
+  s1h.font = { name:'Arial', size:16, bold:true, color:{argb:NAVY} };
+  ws1.mergeCells(1,1,1,3);
+
+  var siteLabels = [
+    ['Survey reference no.','audit-ref'],['Store code','si-store-code'],
+    ['Store name','si-store-name'],['Store type','si-store-type'],
+    ['Address','si-address'],['Country','si-country'],['State / Region','si-state'],
+    ['GPS location','gps-val'],['Auditor name','si-auditor-name'],
+    ['Auditor company','si-auditor-company'],['Audit date','audit-date-field'],
+    ['Site contact person','si-contact-person'],['Site contact number','si-contact-number'],
+    ['Avg monthly bill','si-monthly-bill'],['General site notes','si-notes']
   ];
-  siteFields.forEach(function(f) { siteRows.push(f); });
-  var ws1 = XLSX.utils.aoa_to_sheet(siteRows);
-  ws1['!cols'] = [{wch:22},{wch:40}];
-  XLSX.utils.book_append_sheet(wb, ws1, 'Site Info');
+  siteLabels.forEach(function(pair, i) {
+    var r = i+3, el = document.getElementById(pair[1]);
+    var val = el ? (el.tagName==='SELECT' ? (el.options[el.selectedIndex]||{}).text||'' : el.value) : '';
+    bStyle(ws1, r, 1, pair[0], {bold:true, bg:LBLUE});
+    bStyle(ws1, r, 2, val);
+    ws1.mergeCells(r, 2, r, 3);
+  });
+  ws1.getColumn(1).width = 26;
+  ws1.getColumn(2).width = 44;
 
-  // Sheet 2: Survey Detail (one row per question per unit)
-  var data = rowsToArray(rows);
-  var ws2 = XLSX.utils.aoa_to_sheet(data);
-  ws2['!cols'] = [
-    {wch:20},{wch:22},{wch:12},{wch:16},{wch:12},{wch:18},
-    {wch:14},{wch:14},{wch:18},{wch:38},{wch:16},{wch:36},{wch:10}
-  ];
-  XLSX.utils.book_append_sheet(wb, ws2, 'Survey Detail');
+  // ── Sheet 2: Survey Detail ─────────────────────────────────────────────────
+  var ws2 = wb.addWorksheet('Survey Detail');
+  ws2.views = [{ showGridLines: false }];
+  var d1 = ws2.getCell(1,1); d1.value = 'Refrigeration Survey \u2014 Detail';
+  d1.font = { name:'Arial', size:16, bold:true, color:{argb:NAVY} };
+  ws2.mergeCells(1,1,1,8);
 
-  // Sheet 3: Summary — one row per unit with answer counts
+  var detHdrs = ['Section','System Type','Unit','Question','Answer','Note','Photos','Photo Label'];
+  detHdrs.forEach(function(h,i){ hStyle(ws2, 3, i+1, h); });
+
+  var secBg = { 'Chiller':'FFDDEBF7', 'Freezer':'FFE2EFDA', 'Ice Machine':'FFFCE4D6' };
+  var ansBg = { 'Yes':['FFDCFCE7','FF15803D'], 'No':['FFFEE2E2','FFB91C1C'], 'N/A':['FFF0F0F0','FF555555'] };
+
+  rows.forEach(function(r, i) {
+    var row = i+4;
+    var bg = secBg[r.section] || WHITE;
+    bStyle(ws2,row,1,r.section,{bold:true,bg:bg});
+    bStyle(ws2,row,2,r.system_type,{bg:bg});
+    bStyle(ws2,row,3,r.unit,{bold:true,bg:bg});
+    bStyle(ws2,row,4,r.question);
+    var ans = r.answer;
+    if (ansBg[ans]) bStyle(ws2,row,5,ans,{bold:true,fg:ansBg[ans][1],bg:ansBg[ans][0],align:'center'});
+    else bStyle(ws2,row,5,ans);
+    bStyle(ws2,row,6,r.note);
+    bStyle(ws2,row,7,r.photos,{align:'center'});
+    bStyle(ws2,row,8,r.photos && photos.length ? (r.unit+' | '+r.question) : '',{sz:9,fg:'FF5A6A84'});
+  });
+
+  [14,14,18,38,10,30,10,38].forEach(function(w,i){ ws2.getColumn(i+1).width=w; });
+
+  // ── Sheet 3: Summary ───────────────────────────────────────────────────────
+  var ws3 = wb.addWorksheet('Summary');
+  ws3.views = [{ showGridLines: false }];
+  var sm1 = ws3.getCell(1,1); sm1.value = 'Summary';
+  sm1.font = { name:'Arial', size:16, bold:true, color:{argb:NAVY} };
+  ws3.mergeCells(1,1,1,6);
+  ['Section','Unit','Yes','No','N/A','Total'].forEach(function(h,i){ hStyle(ws3,3,i+1,h); });
+
   var unitMap = {};
   rows.forEach(function(r) {
-    var key = r.section + '|' + r.unit;
-    if (!unitMap[key]) unitMap[key] = {section:r.section, system_type:r.system_type, unit:r.unit, yes:0, no:0, na:0, blank:0, total:0};
-    var u = unitMap[key];
-    if (r.answer === 'Yes') u.yes++;
-    else if (r.answer === 'No') u.no++;
-    else if (r.answer === 'N/A') u.na++;
-    else if (r.question !== 'Unit findings / notes') u.blank++;
-    if (r.question !== 'Unit findings / notes') u.total++;
+    var key = r.section+'|'+r.unit;
+    if (!unitMap[key]) unitMap[key]={section:r.section,system_type:r.system_type,unit:r.unit,yes:0,no:0,na:0,blank:0,total:0};
+    var u=unitMap[key];
+    if(r.answer==='Yes')u.yes++; else if(r.answer==='No')u.no++; else if(r.answer==='N/A')u.na++; else if(r.question!=='Unit findings / notes')u.blank++;
+    if(r.question!=='Unit findings / notes')u.total++;
   });
-  var sumRows = [['Section','System Type','Unit','Yes','No','N/A','Blank','Total questions']];
-  Object.values(unitMap).forEach(function(u) {
-    sumRows.push([u.section, u.system_type, u.unit, u.yes, u.no, u.na, u.blank, u.total]);
+  Object.keys(unitMap).forEach(function(key, i) {
+    var u=unitMap[key], r=i+4, bg=secBg[u.section]||WHITE;
+    bStyle(ws3,r,1,u.section,{bold:true,bg:bg});
+    bStyle(ws3,r,2,u.unit,{bg:bg});
+    bStyle(ws3,r,3,u.yes,{bold:true,fg:'FF15803D',bg:'FFDCFCE7',align:'center'});
+    bStyle(ws3,r,4,u.no,{bold:true,fg:'FFB91C1C',bg:'FFFEE2E2',align:'center'});
+    bStyle(ws3,r,5,u.na,{align:'center'});
+    bStyle(ws3,r,6,u.total,{bold:true,align:'center'});
   });
-  var ws3 = XLSX.utils.aoa_to_sheet(sumRows);
-  ws3['!cols'] = [{wch:16},{wch:14},{wch:20},{wch:6},{wch:6},{wch:6},{wch:8},{wch:16}];
-  XLSX.utils.book_append_sheet(wb, ws3, 'Summary');
+  [16,22,8,8,8,10].forEach(function(w,i){ ws3.getColumn(i+1).width=w; });
 
-  XLSX.writeFile(wb, getSafeFilename() + '.xlsx');
-  showToast('Saved as ' + getSafeFilename() + '.xlsx');
+  // ── Sheet 4: Photo Appendix ────────────────────────────────────────────────
+  var ws4 = wb.addWorksheet('Photo Appendix');
+  ws4.views = [{ showGridLines: false }];
+  var pa1 = ws4.getCell(1,1); pa1.value = 'Photo Appendix';
+  pa1.font = { name:'Arial', size:16, bold:true, color:{argb:NAVY} };
+  ws4.mergeCells(1,1,1,4);
+  var pa2 = ws4.getCell(2,1);
+  pa2.value = 'All survey photos \u2014 labelled by Section | Unit | Question. 2 photos per row.';
+  pa2.font = { name:'Arial', size:10, italic:true, color:{argb:'FF6B7A99'} };
+  ws4.mergeCells(2,1,2,4);
+
+  // Columns: A=left label+photo, B=gap, C=right label+photo, D=gap
+  ws4.getColumn(1).width = 42;
+  ws4.getColumn(2).width = 3;
+  ws4.getColumn(3).width = 42;
+  ws4.getColumn(4).width = 3;
+
+  var IMG_H_PX = 160, IMG_W_PX = 280;
+  var LABEL_ROW_H = 20, IMG_ROW_H = 130;
+
+  var pendingImages = photos.map(function(p, idx) {
+    return { idx:idx, label:p.label, src:p.src };
+  });
+
+  if (pendingImages.length === 0) {
+    var noPhoto = ws4.getCell(4,1);
+    noPhoto.value = 'No photos were captured during this survey.';
+    noPhoto.font = { name:'Arial', size:10, italic:true, color:{argb:'FF6B7A99'} };
+    ws4.mergeCells(4,1,4,4);
+  }
+
+  var startRow = 4;
+  var imagePromises = pendingImages.map(function(item) {
+    return new Promise(function(resolve) {
+      var isRight = item.idx % 2 === 1;
+      var pair    = Math.floor(item.idx / 2);
+      var lrow    = startRow + pair * 2;
+      var irow    = lrow + 1;
+      var col     = isRight ? 3 : 1;
+
+      ws4.getRow(lrow).height = LABEL_ROW_H;
+      ws4.getRow(irow).height = IMG_ROW_H;
+
+      // Label cell
+      var lc = ws4.getCell(lrow, col);
+      lc.value = 'Photo ' + (item.idx+1) + '  \u2014  ' + item.label;
+      lc.font  = { name:'Arial', size:9, bold:true, color:{argb:NAVY} };
+      lc.fill  = { type:'pattern', pattern:'solid', fgColor:{argb:LBLUE} };
+      lc.alignment = { horizontal:'left', vertical:'middle' };
+      lc.border = { top:{style:'medium',color:{argb:NAVY}}, left:{style:'thin',color:{argb:NAVY}}, bottom:thin, right:thin };
+      // no merge needed for label in ExcelJS (single cell)
+
+      // Image cell bg
+      var ic = ws4.getCell(irow, col);
+      ic.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF8FAFC'} };
+      ic.border = { top:thin, left:{style:'thin',color:{argb:NAVY}}, bottom:{style:'medium',color:{argb:NAVY}}, right:thin };
+
+      // Embed image from base64
+      var src = item.src;
+      // src is data:image/jpeg;base64,.... or data:image/png;base64,...
+      var parts = src.split(',');
+      var b64   = parts[1] || '';
+      var mime  = (src.match(/data:image\/(\w+);/) || ['','jpeg'])[1];
+      var ext   = (mime === 'png') ? 'png' : 'jpeg';
+
+      var imgId = wb.addImage({ base64: b64, extension: ext });
+      // Position: col-1 index (0-based), row-1 index (0-based)
+      ws4.addImage(imgId, {
+        tl: { col: col-1, row: irow-1 },
+        ext: { width: IMG_W_PX, height: IMG_H_PX }
+      });
+
+      resolve();
+    });
+  });
+
+  // Footer
+  var totalRow = startRow + Math.ceil(pendingImages.length / 2) * 2 + 1;
+  var fc = ws4.getCell(totalRow, 1);
+  fc.value = 'Total: ' + pendingImages.length + ' photo(s) captured in this survey.';
+  fc.font  = { name:'Arial', size:9, italic:true, color:{argb:'FF6B7A99'} };
+
+  // Write file
+  Promise.all(imagePromises).then(function() {
+    wb.xlsx.writeBuffer().then(function(buffer) {
+      var blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a'); a.href=url;
+      a.download = getSafeFilename()+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      showToast('Excel saved \u2014 '+photos.length+' photo(s) embedded.');
+    });
+  });
 }
+
 
 function exportPDF(){document.getElementById('export-menu').classList.remove('show');buildPhotoAppendix();window.print();}
 window.onbeforeprint=buildPhotoAppendix;
